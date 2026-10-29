@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth motion-reduce:scroll-auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planilha Fluxo Claro: controle seu fluxo de caixa em um só lugar</title>
+  <meta name="description" content="Planilha de Fluxo de Caixa para Excel e Google Sheets. Registre entradas e saídas, veja o saldo em gráficos e projete os próximos meses. Pagamento único." />
+  <meta name="theme-color" content="#F1F5EC" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Bricolage Grotesque"', 'system-ui', 'sans-serif'],
+            sans: ['"Instrument Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            ink: '#0E2A21',     // tinta verde-escura
+            paper: '#F1F5EC',   // papel de contabilidade
+            sheet: '#E4EDDD',   // cabeçalhos da planilha
+            line: '#CFDBC8',    // linhas da grade
+            leaf: '#1E7A52',    // verde de planilha
+            mark: '#FFDD44',    // marca-texto
+            rust: '#B8402E',    // saídas / negativos
+            muted: '#556B60',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body { background-color: #F1F5EC; }
+
+    /* Papel quadriculado, como as células de uma planilha */
+    .gridpaper {
+      background-image:
+        linear-gradient(to right, rgba(14, 42, 33, .07) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(14, 42, 33, .07) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* Botão de compra: marca-texto amarelo com sombra dura */
+    .btn-buy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      background: #FFDD44;
+      color: #0E2A21;
+      border: 2px solid #0E2A21;
+      box-shadow: 5px 5px 0 #0E2A21;
+      font-weight: 800;
+      line-height: 1.1;
+      text-align: center;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .btn-buy:hover  { transform: translate(2px, 2px); box-shadow: 3px 3px 0 #0E2A21; }
+    .btn-buy:active { transform: translate(5px, 5px); box-shadow: 0 0 0 #0E2A21; }
+    .btn-buy:focus-visible { outline: 3px solid #1E7A52; outline-offset: 3px; }
+    .btn-buy.on-dark { box-shadow: 5px 5px 0 #F1F5EC; }
+    .btn-buy.on-dark:hover  { box-shadow: 3px 3px 0 #F1F5EC; }
+    .btn-buy.on-dark:active { box-shadow: 0 0 0 #F1F5EC; }
+    .btn-buy.on-dark:focus-visible { outline-color: #FFDD44; }
+
+    /* Único movimento automático da página: as barras do painel crescem ao carregar */
+    @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    .bar {
+      transform-box: fill-box;
+      transform-origin: 50% 100%;
+      animation: grow .7s cubic-bezier(.2, .8, .2, 1) both;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bar { animation: none; }
+      .btn-buy { transition: none; }
+    }
+
+    summary::-webkit-details-marker { display: none; }
+  </style>
+</head>
+
+<body class="font-sans text-ink antialiased">
+
+  <!-- ============ TOPO ============ -->
+  <header class="sticky top-0 z-40 border-b-2 border-ink bg-paper/90 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
+      <a href="#topo" class="flex items-center gap-2.5" aria-label="Fluxo Claro, início">
+        <span class="grid h-8 w-8 grid-cols-2 gap-px border-2 border-ink bg-ink" aria-hidden="true">
+          <span class="bg-leaf"></span><span class="bg-white"></span>
+          <span class="bg-white"></span><span class="bg-mark"></span>
+        </span>
+        <span class="font-display text-lg font-extrabold tracking-tight">Fluxo Claro</span>
+      </a>
+      <a href="#oferta" data-buy class="btn-buy rounded-md px-4 py-2 text-sm">Comprar a planilha</a>
+    </div>
+  </header>
+
+  <main id="topo">
+
+    <!-- ============ HERO ============ -->
+    <section id="hero" class="gridpaper border-b-2 border-ink">
+      <!-- régua de colunas, como no topo de uma planilha -->
+      <div aria-hidden="true" class="flex select-none border-b-2 border-ink bg-sheet text-[11px] font-semibold text-muted">
+        <div class="h-7 w-10 shrink-0 border-r border-line"></div>
+        <div class="grid flex-1 grid-cols-6 sm:grid-cols-12">
+          <span class="border-r border-line py-1 text-center">A</span>
+          <span class="border-r border-line py-1 text-center">B</span>
+          <span class="border-r border-line py-1 text-center">C</span>
+          <span class="border-r border-line py-1 text-center">D</span>
+          <span class="border-r border-line py-1 text-center">E</span>
+          <span class="border-r border-line py-1 text-center">F</span>
+          <span class="hidden border-r border-line py-1 text-center sm:block">G</span>
+          <span class="hidden border-r border-line py-1 text-center sm:block">H</span>
+          <span class="hidden border-r border-line py-1 text-center sm:block">I</span>
+          <span class="hidden border-r border-line py-1 text-center sm:block">J</span>
+          <span class="hidden border-r border-line py-1 text-center sm:block">K</span>
+          <span class="hidden py-1 text-center sm:block">L</span>
+        </div>
+      </div>
+
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-14 sm:py-20 lg:grid-cols-12 lg:gap-10">
+        <!-- texto -->
+        <div class="lg:col-span-6">
+          <p class="inline-flex items-center gap-2 border-2 border-ink bg-white px-3 py-1 text-sm font-semibold">
+            <span class="h-2 w-2 bg-leaf" aria-hidden="true"></span>
+            Planilha de Fluxo de Caixa para Excel e Google Sheets
+          </p>
+
+          <h1 class="mt-6 font-display text-[clamp(2.5rem,6.6vw,4.5rem)] font-extrabold leading-[1.02] tracking-tight">
+            Saiba para onde vai cada real e quanto vai sobrar no fim do mês.
+          </h1>
+
+          <p class="mt-6 max-w-xl text-lg leading-relaxed text-muted">
+            A Planilha Fluxo Claro organiza suas entradas e saídas, mostra o saldo em gráficos e projeta os próximos meses. Abra, preencha e acompanhe, sem fórmulas para montar.
+          </p>
+
+          <div class="mt-9 flex flex-col items-start gap-4">
+            <a href="#oferta" data-buy class="btn-buy w-full rounded-lg px-8 py-5 text-lg sm:w-auto sm:text-xl">
+              Quero minha planilha por R$&nbsp;47
+            </a>
+            <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium">
+              <li class="flex items-center gap-2">
+                <svg class="h-4 w-4 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+                Acesso imediato
+              </li>
+              <li class="flex items-center gap-2">
+                <svg class="h-4 w-4 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+                Pagamento único, sem mensalidade
+              </li>
+              <li class="flex items-center gap-2">
+                <svg class="h-4 w-4 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+                Garantia de 7 dias
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- planilha de exemplo -->
+        <div class="lg:col-span-6">
+          <div class="overflow-hidden rounded-md border-2 border-ink bg-white shadow-[8px_8px_0_#0E2A21]">
+            <div class="flex items-center gap-2 border-b-2 border-ink bg-sheet px-3 py-2">
+              <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+              <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+              <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+              <span class="ml-2 text-xs font-semibold">Fluxo-Claro.xlsx</span>
+            </div>
+
+            <div class="p-4 sm:p-5">
+              <!-- barra de fórmulas -->
+              <div class="flex items-center gap-2 border border-line bg-paper px-2 py-1 text-[11px] text-muted">
+                <span class="font-bold italic text-leaf">fx</span>
+                <span class="font-mono">=SOMA(Entradas)-SOMA(Saídas)</span>
+              </div>
+
+              <div class="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                <div class="border border-line p-2.5 sm:p-3">
+                  <p class="text-[11px] font-semibold text-muted sm:text-xs">Entradas</p>
+                  <p class="mt-1 font-mono text-[13px] font-semibold tabular-nums text-leaf sm:text-base">12.480,00</p>
+                </div>
+                <div class="border border-line p-2.5 sm:p-3">
+                  <p class="text-[11px] font-semibold text-muted sm:text-xs">Saídas</p>
+                  <p class="mt-1 font-mono text-[13px] font-semibold tabular-nums text-rust sm:text-base">8.215,00</p>
+                </div>
+                <!-- célula selecionada -->
+                <div class="relative border-2 border-leaf bg-mark/25 p-2.5 sm:p-3">
+                  <p class="text-[11px] font-semibold text-muted sm:text-xs">Saldo</p>
+                  <p class="mt-1 font-mono text-[13px] font-semibold tabular-nums sm:text-base">4.265,00</p>
+                  <span class="absolute -bottom-[5px] -right-[5px] h-2 w-2 border border-white bg-leaf" aria-hidden="true"></span>
+                </div>
+              </div>
+
+              <div class="mt-5 flex items-center justify-between text-[11px] font-semibold text-muted sm:text-xs">
+                <span>Entradas e saídas por mês</span>
+                <span class="flex items-center gap-3">
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 bg-leaf"></span>Entradas</span>
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 bg-rust"></span>Saídas</span>
+                </span>
+              </div>
+
+              <svg viewBox="0 0 300 120" class="mt-2 w-full" role="img" aria-label="Gráfico de barras de exemplo com entradas e saídas dos últimos seis meses">
+                <g stroke="#CFDBC8" stroke-width="1">
+                  <line x1="0" y1="25" x2="300" y2="25"/>
+                  <line x1="0" y1="50" x2="300" y2="50"/>
+                  <line x1="0" y1="75" x2="300" y2="75"/>
+                </g>
+                <g fill="#1E7A52">
+                  <rect class="bar" style="animation-delay:0ms"   x="20"  y="40" width="14" height="60"/>
+                  <rect class="bar" style="animation-delay:80ms"  x="68"  y="32" width="14" height="68"/>
+                  <rect class="bar" style="animation-delay:160ms" x="116" y="36" width="14" height="64"/>
+                  <rect class="bar" style="animation-delay:240ms" x="164" y="24" width="14" height="76"/>
+                  <rect class="bar" style="animation-delay:320ms" x="212" y="28" width="14" height="72"/>
+                  <rect class="bar" style="animation-delay:400ms" x="260" y="16" width="14" height="84"/>
+                </g>
+                <g fill="#B8402E">
+                  <rect class="bar" style="animation-delay:40ms"  x="36"  y="52" width="14" height="48"/>
+                  <rect class="bar" style="animation-delay:120ms" x="84"  y="48" width="14" height="52"/>
+                  <rect class="bar" style="animation-delay:200ms" x="132" y="42" width="14" height="58"/>
+                  <rect class="bar" style="animation-delay:280ms" x="180" y="50" width="14" height="50"/>
+                  <rect class="bar" style="animation-delay:360ms" x="228" y="44" width="14" height="56"/>
+                  <rect class="bar" style="animation-delay:440ms" x="276" y="46" width="14" height="54"/>
+                </g>
+                <line x1="0" y1="100" x2="300" y2="100" stroke="#0E2A21" stroke-width="1.5"/>
+                <g font-size="9" fill="#556B60" text-anchor="middle" font-family="Instrument Sans, sans-serif">
+                  <text x="35"  y="114">Mai</text>
+                  <text x="83"  y="114">Jun</text>
+                  <text x="131" y="114">Jul</text>
+                  <text x="179" y="114">Ago</text>
+                  <text x="227" y="114">Set</text>
+                  <text x="275" y="114">Out</text>
+                </g>
+              </svg>
+            </div>
+
+            <div class="flex border-t-2 border-ink bg-sheet text-xs font-semibold">
+              <span class="border-r-2 border-ink bg-white px-4 py-2 text-leaf">Painel</span>
+              <span class="border-r border-line px-4 py-2 text-muted">Lançamentos</span>
+              <span class="px-4 py-2 text-muted">Projeção</span>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-muted">Valores de exemplo, apenas para ilustrar.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DOR ============ -->
+    <section class="border-b-2 border-ink bg-white">
+      <div class="mx-auto grid max-w-6xl gap-10 px-5 py-16 sm:py-24 md:grid-cols-12">
+        <h2 class="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:col-span-5">
+          A conta não fecha e você não sabe por quê?
+        </h2>
+        <div class="md:col-span-7">
+          <ul>
+            <li class="flex gap-4 border-t border-line py-4">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              <p class="text-lg">Você anota gastos no celular, no caderno e de memória.</p>
+            </li>
+            <li class="flex gap-4 border-t border-line py-4">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              <p class="text-lg">O saldo que você imagina nunca bate com o do extrato.</p>
+            </li>
+            <li class="flex gap-4 border-y border-line py-4">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              <p class="text-lg">Antes de assumir uma parcela nova, não há como saber se o mês aguenta.</p>
+            </li>
+          </ul>
+          <p class="mt-6 text-xl font-semibold">
+            Uma planilha só, com tudo no lugar, resolve isso.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BENEFÍCIOS ============ -->
+    <section id="beneficios" class="gridpaper border-b-2 border-ink">
+      <div class="mx-auto max-w-6xl px-5 py-16 sm:py-24">
+        <h2 class="max-w-2xl font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          O que muda quando o caixa fica em um lugar só
+        </h2>
+
+        <div class="mt-10 grid gap-[2px] border-2 border-ink bg-ink sm:grid-cols-2 lg:grid-cols-3">
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Visão clara do mês</h3>
+            <p class="mt-2 leading-relaxed text-muted">Entradas, saídas e saldo se atualizam sozinhos conforme você lança.</p>
+          </div>
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Categorias prontas</h3>
+            <p class="mt-2 leading-relaxed text-muted">Moradia, alimentação, transporte e outras já vêm listadas. Troque os nomes se quiser.</p>
+          </div>
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Projeção dos próximos meses</h3>
+            <p class="mt-2 leading-relaxed text-muted">Veja o saldo estimado à frente e perceba um aperto antes que ele chegue.</p>
+          </div>
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7"/><path d="M2 20h20"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Gráficos automáticos</h3>
+            <p class="mt-2 leading-relaxed text-muted">Nada de montar gráfico. Você preenche e o painel se refaz.</p>
+          </div>
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Pronta em minutos</h3>
+            <p class="mt-2 leading-relaxed text-muted">Abra, informe o saldo inicial e comece a lançar. Não precisa de curso.</p>
+          </div>
+          <div class="bg-white p-6">
+            <svg class="h-7 w-7 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1"/><path d="M2 20h20"/></svg>
+            <h3 class="mt-4 font-display text-xl font-extrabold">Excel e Google Sheets</h3>
+            <p class="mt-2 leading-relaxed text-muted">Use no computador ou no celular. Você paga uma vez e a planilha é sua.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PRINTS DA PLANILHA ============ -->
+    <!--
+      Estas "telas" são desenhadas em HTML/SVG para a página funcionar em um único arquivo.
+      Para usar prints reais, troque o conteúdo de cada moldura por:
+      <img src="seu-print.png" alt="Aba Painel da planilha" class="w-full" />
+    -->
+    <section id="prints" class="border-b-2 border-ink bg-white">
+      <div class="mx-auto max-w-6xl px-5 py-16 sm:py-24">
+        <h2 class="max-w-2xl font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          Veja por dentro da planilha
+        </h2>
+        <p class="mt-4 max-w-xl text-lg text-muted">
+          Três abas, cada uma com uma função. Os valores abaixo são exemplos.
+        </p>
+
+        <div class="mt-12 grid gap-12 lg:grid-cols-5 lg:gap-10">
+
+          <!-- Painel -->
+          <figure class="lg:col-span-3 lg:sticky lg:top-24 lg:self-start">
+            <div class="overflow-hidden rounded-md border-2 border-ink bg-white shadow-[6px_6px_0_#0E2A21]">
+              <div class="flex items-center gap-2 border-b-2 border-ink bg-sheet px-3 py-2">
+                <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                <span class="ml-2 text-xs font-semibold">Fluxo-Claro.xlsx</span>
+              </div>
+
+              <div class="p-4 sm:p-6">
+                <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div class="border border-line p-3">
+                    <p class="text-xs font-semibold text-muted">Entradas</p>
+                    <p class="mt-1 font-mono text-sm font-semibold tabular-nums text-leaf sm:text-lg">12.480,00</p>
+                  </div>
+                  <div class="border border-line p-3">
+                    <p class="text-xs font-semibold text-muted">Saídas</p>
+                    <p class="mt-1 font-mono text-sm font-semibold tabular-nums text-rust sm:text-lg">8.215,00</p>
+                  </div>
+                  <div class="relative border-2 border-leaf bg-mark/25 p-3">
+                    <p class="text-xs font-semibold text-muted">Saldo</p>
+                    <p class="mt-1 font-mono text-sm font-semibold tabular-nums sm:text-lg">4.265,00</p>
+                    <span class="absolute -bottom-[5px] -right-[5px] h-2 w-2 border border-white bg-leaf" aria-hidden="true"></span>
+                  </div>
+                </div>
+
+                <p class="mt-6 text-xs font-semibold text-muted sm:text-sm">Gastos por categoria no mês</p>
+                <div class="mt-3 flex items-center gap-6">
+                  <svg viewBox="0 0 100 100" class="h-32 w-32 shrink-0 sm:h-40 sm:w-40" role="img" aria-label="Gráfico de rosca de exemplo com gastos por categoria">
+                    <g transform="rotate(-90 50 50)" fill="none" stroke-width="16">
+                      <circle cx="50" cy="50" r="36" stroke="#1E7A52" stroke-dasharray="79.17 226.2" stroke-dashoffset="0"/>
+                      <circle cx="50" cy="50" r="36" stroke="#6BBF93" stroke-dasharray="56.55 226.2" stroke-dashoffset="-79.17"/>
+                      <circle cx="50" cy="50" r="36" stroke="#FFDD44" stroke-dasharray="33.93 226.2" stroke-dashoffset="-135.72"/>
+                      <circle cx="50" cy="50" r="36" stroke="#E8825C" stroke-dasharray="22.62 226.2" stroke-dashoffset="-169.65"/>
+                      <circle cx="50" cy="50" r="36" stroke="#B7C7B0" stroke-dasharray="33.93 226.2" stroke-dashoffset="-192.27"/>
+                    </g>
+                    <text x="50" y="48" text-anchor="middle" font-size="7" fill="#556B60" font-family="Instrument Sans, sans-serif">Total</text>
+                    <text x="50" y="59" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2A21" font-family="IBM Plex Mono, monospace">8.215</text>
+                  </svg>
+
+                  <ul class="flex-1 space-y-2 text-xs sm:text-sm">
+                    <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 bg-[#1E7A52]"></span>Moradia</span><span class="font-mono tabular-nums text-muted">35%</span></li>
+                    <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 bg-[#6BBF93]"></span>Alimentação</span><span class="font-mono tabular-nums text-muted">25%</span></li>
+                    <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 bg-[#FFDD44]"></span>Transporte</span><span class="font-mono tabular-nums text-muted">15%</span></li>
+                    <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 bg-[#E8825C]"></span>Lazer</span><span class="font-mono tabular-nums text-muted">10%</span></li>
+                    <li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2"><span class="h-2.5 w-2.5 bg-[#B7C7B0]"></span>Outros</span><span class="font-mono tabular-nums text-muted">15%</span></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="flex border-t-2 border-ink bg-sheet text-xs font-semibold">
+                <span class="border-r-2 border-ink bg-white px-4 py-2 text-leaf">Painel</span>
+                <span class="border-r border-line px-4 py-2 text-muted">Lançamentos</span>
+                <span class="px-4 py-2 text-muted">Projeção</span>
+              </div>
+            </div>
+            <figcaption class="mt-4">
+              <p class="font-display text-lg font-extrabold">Painel</p>
+              <p class="text-muted">Saldo, entradas, saídas e gastos por categoria, sempre atualizados.</p>
+            </figcaption>
+          </figure>
+
+          <div class="flex flex-col gap-12 lg:col-span-2">
+
+            <!-- Lançamentos -->
+            <figure>
+              <div class="overflow-hidden rounded-md border-2 border-ink bg-white shadow-[6px_6px_0_#0E2A21]">
+                <div class="flex items-center gap-2 border-b-2 border-ink bg-sheet px-3 py-2">
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="ml-2 text-xs font-semibold">Fluxo-Claro.xlsx</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[320px] border-collapse text-[11px] sm:text-xs">
+                    <thead>
+                      <tr class="bg-leaf text-left text-white">
+                        <th class="w-6 border-r border-white/30 bg-sheet px-1 py-1.5"></th>
+                        <th class="px-2 py-1.5 font-semibold">Data</th>
+                        <th class="px-2 py-1.5 font-semibold">Descrição</th>
+                        <th class="px-2 py-1.5 font-semibold">Categoria</th>
+                        <th class="px-2 py-1.5 text-right font-semibold">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody class="font-mono tabular-nums">
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">2</td><td class="px-2 py-1.5">01/10</td><td class="px-2 font-sans">Venda cliente A</td><td class="px-2 font-sans text-muted">Receita</td><td class="px-2 text-right text-leaf">+2.500,00</td></tr>
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">3</td><td class="px-2 py-1.5">03/10</td><td class="px-2 font-sans">Aluguel</td><td class="px-2 font-sans text-muted">Moradia</td><td class="px-2 text-right text-rust">-1.450,00</td></tr>
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">4</td><td class="px-2 py-1.5">05/10</td><td class="px-2 font-sans">Supermercado</td><td class="px-2 font-sans text-muted">Alimentação</td><td class="px-2 text-right text-rust">-612,40</td></tr>
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">5</td><td class="px-2 py-1.5">08/10</td><td class="px-2 font-sans">Serviço prestado</td><td class="px-2 font-sans text-muted">Receita</td><td class="px-2 text-right text-leaf">+1.800,00</td></tr>
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">6</td><td class="px-2 py-1.5">10/10</td><td class="px-2 font-sans">Combustível</td><td class="px-2 font-sans text-muted">Transporte</td><td class="px-2 text-right text-rust">-240,00</td></tr>
+                      <tr class="border-b border-line"><td class="border-r border-line bg-sheet px-1 text-center text-muted">7</td><td class="px-2 py-1.5">12/10</td><td class="px-2 font-sans">Internet</td><td class="px-2 font-sans text-muted">Contas</td><td class="px-2 text-right text-rust">-119,90</td></tr>
+                      <tr><td class="border-r border-line bg-sheet px-1 text-center text-muted">8</td><td class="px-2 py-1.5">15/10</td><td class="px-2 font-sans">Freelance</td><td class="px-2 font-sans text-muted">Receita</td><td class="px-2 text-right text-leaf">+950,00</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="flex border-t-2 border-ink bg-sheet text-xs font-semibold">
+                  <span class="border-r border-line px-4 py-2 text-muted">Painel</span>
+                  <span class="border-r-2 border-ink bg-white px-4 py-2 text-leaf">Lançamentos</span>
+                  <span class="px-4 py-2 text-muted">Projeção</span>
+                </div>
+              </div>
+              <figcaption class="mt-4">
+                <p class="font-display text-lg font-extrabold">Lançamentos</p>
+                <p class="text-muted">Um só lugar para registrar cada entrada e saída, com a categoria já pronta para escolher.</p>
+              </figcaption>
+            </figure>
+
+            <!-- Projeção -->
+            <figure>
+              <div class="overflow-hidden rounded-md border-2 border-ink bg-white shadow-[6px_6px_0_#0E2A21]">
+                <div class="flex items-center gap-2 border-b-2 border-ink bg-sheet px-3 py-2">
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="h-2.5 w-2.5 rounded-full border border-ink bg-white"></span>
+                  <span class="ml-2 text-xs font-semibold">Fluxo-Claro.xlsx</span>
+                </div>
+
+                <div class="p-4">
+                  <div class="flex items-end justify-between gap-4">
+                    <div>
+                      <p class="text-xs font-semibold text-muted">Saldo projetado em março</p>
+                      <p class="mt-1 font-mono text-lg font-semibold tabular-nums">9.870,00</p>
+                    </div>
+                    <span class="flex items-center gap-3 text-[11px] font-semibold text-muted">
+                      <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-ink"></span>Atual</span>
+                      <span class="flex items-center gap-1.5"><span class="h-0 w-4 border-t-2 border-dashed border-leaf"></span>Projeção</span>
+                    </span>
+                  </div>
+
+                  <svg viewBox="0 0 300 130" class="mt-3 w-full" role="img" aria-label="Gráfico de linha de exemplo com a projeção do saldo para os próximos meses">
+                    <g stroke="#CFDBC8" stroke-width="1">
+                      <line x1="0" y1="30" x2="300" y2="30"/>
+                      <line x1="0" y1="60" x2="300" y2="60"/>
+                      <line x1="0" y1="90" x2="300" y2="90"/>
+                    </g>
+                    <polygon points="20,95 72,88 124,80 176,66 228,60 280,42 280,110 20,110" fill="#1E7A52" fill-opacity=".12"/>
+                    <polyline points="20,95 72,88 124,80 176,66 228,60 280,42" fill="none" stroke="#1E7A52" stroke-width="2.5" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="20" cy="95" r="4.5" fill="#0E2A21"/>
+                    <g fill="#fff" stroke="#1E7A52" stroke-width="2">
+                      <circle cx="72" cy="88" r="3.5"/>
+                      <circle cx="124" cy="80" r="3.5"/>
+                      <circle cx="176" cy="66" r="3.5"/>
+                      <circle cx="228" cy="60" r="3.5"/>
+                      <circle cx="280" cy="42" r="3.5"/>
+                    </g>
+                    <line x1="0" y1="110" x2="300" y2="110" stroke="#0E2A21" stroke-width="1.5"/>
+                    <g font-size="9" fill="#556B60" text-anchor="middle" font-family="Instrument Sans, sans-serif">
+                      <text x="20"  y="124">Out</text>
+                      <text x="72"  y="124">Nov</text>
+                      <text x="124" y="124">Dez</text>
+                      <text x="176" y="124">Jan</text>
+                      <text x="228" y="124">Fev</text>
+                      <text x="280" y="124">Mar</text>
+                    </g>
+                  </svg>
+                </div>
+
+                <div class="flex border-t-2 border-ink bg-sheet text-xs font-semibold">
+                  <span class="border-r border-line px-4 py-2 text-muted">Painel</span>
+                  <span class="border-r border-line px-4 py-2 text-muted">Lançamentos</span>
+                  <span class="border-r-2 border-l-2 border-r-ink border-l-ink bg-white px-4 py-2 text-leaf">Projeção</span>
+                </div>
+              </div>
+              <figcaption class="mt-4">
+                <p class="font-display text-lg font-extrabold">Projeção</p>
+                <p class="text-muted">O saldo estimado dos próximos meses, calculado com base no que você já lançou.</p>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMO FUNCIONA ============ -->
+    <section class="gridpaper border-b-2 border-ink">
+      <div class="mx-auto max-w-6xl px-5 py-16 sm:py-24">
+        <h2 class="max-w-2xl font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          Comece em três passos
+        </h2>
+
+        <ol class="mt-10 grid gap-8 md:grid-cols-3">
+          <li class="border-t-4 border-ink pt-5">
+            <span class="font-mono text-sm font-semibold text-leaf">Passo 1</span>
+            <h3 class="mt-2 font-display text-xl font-extrabold">Baixe e abra</h3>
+            <p class="mt-2 leading-relaxed text-muted">Logo após a compra você recebe o acesso por e-mail e abre no Excel ou no Google Sheets.</p>
+          </li>
+          <li class="border-t-4 border-ink pt-5">
+            <span class="font-mono text-sm font-semibold text-leaf">Passo 2</span>
+            <h3 class="mt-2 font-display text-xl font-extrabold">Informe o saldo e lance</h3>
+            <p class="mt-2 leading-relaxed text-muted">Digite seu saldo inicial e registre cada entrada e saída na aba Lançamentos.</p>
+          </li>
+          <li class="border-t-4 border-ink pt-5">
+            <span class="font-mono text-sm font-semibold text-leaf">Passo 3</span>
+            <h3 class="mt-2 font-display text-xl font-extrabold">Acompanhe o painel</h3>
+            <p class="mt-2 leading-relaxed text-muted">Veja o saldo, os gráficos e a projeção mudarem a cada lançamento.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ OFERTA ============ -->
+    <section id="oferta" class="bg-ink text-paper">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 sm:py-24 lg:grid-cols-2 lg:gap-16">
+        <div>
+          <h2 class="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+            Um pagamento único. A planilha é sua para sempre.
+          </h2>
+          <p class="mt-5 max-w-md text-lg leading-relaxed text-paper/75">
+            Sem assinatura e sem mensalidade. Você compra uma vez e usa quantos meses quiser.
+          </p>
+          <p class="mt-8 max-w-md border-l-4 border-mark pl-4 leading-relaxed text-paper/90">
+            <strong class="font-semibold text-white">Garantia de 7 dias.</strong>
+            Se a planilha não fizer sentido para você, peça o reembolso e devolvemos o valor.
+          </p>
+        </div>
+
+        <!-- EDITE AQUI: preço e itens incluídos -->
+        <div class="border-2 border-ink bg-paper p-6 text-ink shadow-[8px_8px_0_#FFDD44] sm:p-8">
+          <p class="font-display text-xl font-extrabold">Planilha Fluxo Claro</p>
+
+          <div class="mt-4 flex items-end gap-3">
+            <span class="font-display text-6xl font-extrabold leading-none tracking-tight sm:text-7xl">R$&nbsp;47</span>
+            <span class="pb-1 text-lg text-muted line-through">R$ 97</span>
+          </div>
+          <p class="mt-2 text-sm font-medium text-muted">Pagamento único, sem mensalidade.</p>
+
+          <ul class="mt-6 space-y-3 border-t border-line pt-6">
+            <li class="flex gap-3">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+              Planilha completa com as abas Painel, Lançamentos e Projeção
+            </li>
+            <li class="flex gap-3">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+              Arquivo para Excel e versão para Google Sheets
+            </li>
+            <li class="flex gap-3">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+              Guia rápido de uso em PDF
+            </li>
+            <li class="flex gap-3">
+              <svg class="mt-1 h-5 w-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+              Suporte por e-mail para dúvidas de uso
+            </li>
+          </ul>
+
+          <a href="#oferta" data-buy class="btn-buy mt-8 w-full rounded-lg px-6 py-5 text-lg sm:text-xl">
+            Comprar agora por R$&nbsp;47
+          </a>
+          <p class="mt-3 text-center text-xs text-muted">Compra segura. Você recebe o acesso logo após a confirmação do pagamento.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section id="duvidas" class="border-b-2 border-ink bg-white">
+      <div class="mx-auto max-w-3xl px-5 py-16 sm:py-24">
+        <h2 class="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          Perguntas frequentes
+        </h2>
+
+        <div class="mt-8 border-t-2 border-ink">
+          <details class="group border-b-2 border-ink">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-leaf">
+              Funciona no Excel e no Google Sheets?
+              <svg class="h-5 w-5 shrink-0 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">Sim. Você recebe o arquivo para Excel e também uma versão para abrir no Google Sheets, no computador ou no celular.</p>
+          </details>
+
+          <details class="group border-b-2 border-ink">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-leaf">
+              Preciso saber Excel para usar?
+              <svg class="h-5 w-5 shrink-0 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">Não. As fórmulas já estão prontas. Você só digita os lançamentos e o painel se atualiza sozinho.</p>
+          </details>
+
+          <details class="group border-b-2 border-ink">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-leaf">
+              Posso usar para o meu negócio?
+              <svg class="h-5 w-5 shrink-0 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">Pode. A planilha serve para finanças pessoais, autônomos e pequenos negócios. Basta ajustar os nomes das categorias ao seu caso.</p>
+          </details>
+
+          <details class="group border-b-2 border-ink">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-leaf">
+              Como recebo a planilha?
+              <svg class="h-5 w-5 shrink-0 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">Por e-mail, logo após a confirmação do pagamento, com o link de acesso aos arquivos.</p>
+          </details>
+
+          <details class="group border-b-2 border-ink">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-leaf">
+              E se eu não gostar?
+              <svg class="h-5 w-5 shrink-0 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </summary>
+            <p class="pb-5 leading-relaxed text-muted">Você tem 7 dias para pedir o reembolso, sem burocracia. Basta responder ao e-mail de acesso.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA FINAL ============ -->
+    <section class="gridpaper">
+      <div class="mx-auto max-w-3xl px-5 py-16 text-center sm:py-24">
+        <h2 class="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+          Feche o próximo mês sabendo o seu saldo.
+        </h2>
+        <p class="mx-auto mt-5 max-w-xl text-lg text-muted">
+          Em poucos minutos você tem o caixa organizado e a projeção dos próximos meses na tela.
+        </p>
+        <a href="#oferta" data-buy class="btn-buy mt-9 w-full rounded-lg px-8 py-5 text-lg sm:w-auto sm:text-xl">
+          Quero minha planilha por R$&nbsp;47
+        </a>
+        <p class="mt-4 text-sm text-muted">Pagamento único. Garantia de 7 dias.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ RODAPÉ ============ -->
+  <footer class="border-t-2 border-ink bg-ink pb-28 pt-10 text-sm text-paper/70 md:pb-10">
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
+      <p>&copy; <span id="year">2026</span> Fluxo Claro. Todos os direitos reservados.</p>
+      <nav class="flex gap-5" aria-label="Links do rodapé">
+        <a href="#" class="underline-offset-4 hover:text-white hover:underline">Termos de uso</a>
+        <a href="#" class="underline-offset-4 hover:text-white hover:underline">Política de privacidade</a>
+        <a href="#" class="underline-offset-4 hover:text-white hover:underline">Contato</a>
+      </nav>
+    </div>
+    <p class="mx-auto mt-4 max-w-6xl px-5 text-xs text-paper/50">Os valores exibidos nas imagens da planilha são exemplos ilustrativos.</p>
+  </footer>
+
+  <!-- Barra de compra fixa no celular -->
+  <div id="stickybar" class="fixed inset-x-0 bottom-0 z-40 translate-y-full border-t-2 border-ink bg-paper px-4 py-3 transition-transform duration-200 motion-reduce:transition-none md:hidden" aria-hidden="true">
+    <div class="flex items-center justify-between gap-4">
+      <div class="leading-tight">
+        <p class="text-xs text-muted line-through">R$ 97</p>
+        <p class="font-display text-2xl font-extrabold">R$&nbsp;47</p>
+      </div>
+      <a href="#oferta" data-buy tabindex="-1" class="btn-buy flex-1 rounded-lg px-5 py-3.5 text-base">Comprar agora</a>
+    </div>
+  </div>
+
+  <script>
+    // 1) Cole aqui o link do seu checkout (Hotmart, Kiwify, Eduzz, Stripe, etc.).
+    //    Enquanto estiver vazio, os botões levam o visitante até a seção de oferta.
+    const CHECKOUT_URL = "";
+
+    if (CHECKOUT_URL) {
+      document.querySelectorAll("[data-buy]").forEach(function (a) {
+        a.href = CHECKOUT_URL;
+        a.target = "_blank";
+        a.rel = "noopener";
+      });
+    }
+
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    // 2) Barra fixa de compra no celular: aparece depois do topo e some na seção de oferta.
+    (function () {
+      var bar = document.getElementById("stickybar");
+      var hero = document.getElementById("hero");
+      var offer = document.getElementById("oferta");
+      if (!bar || !hero || !offer || !("IntersectionObserver" in window)) return;
+
+      var heroVisible = true;
+      var offerVisible = false;
+
+      function update() {
+        var show = !heroVisible && !offerVisible;
+        bar.classList.toggle("translate-y-full", !show);
+        bar.setAttribute("aria-hidden", show ? "false" : "true");
+        var link = bar.querySelector("a");
+        if (link) link.tabIndex = show ? 0 : -1;
+      }
+
+      new IntersectionObserver(function (entries) {
+        heroVisible = entries[0].isIntersecting;
+        update();
+      }).observe(hero);
+
+      new IntersectionObserver(function (entries) {
+        offerVisible = entries[0].isIntersecting;
+        update();
+      }, { threshold: 0.15 }).observe(offer);
+    })();
+  </script>
+</body>
+</html>
